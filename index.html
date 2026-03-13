@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PhoneWatch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a26;
+    --accent: #00ff88;
+    --accent2: #ff3366;
+    --accent3: #3366ff;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+    --border: #2a2a3a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCHERMATA INIZIALE ── */
+  #screen-home {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    gap: 2rem;
+    position: relative;
+  }
+
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .logo {
+    font-size: 2.8rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    position: relative;
+  }
+  .logo span { color: var(--accent); }
+  .logo-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-align: center;
+    margin-top: -1rem;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  /* Upload video */
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .upload-area:hover, .upload-area.dragover {
+    border-color: var(--accent);
+    background: rgba(0,255,136,0.04);
+  }
+  .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .upload-text { font-size: 0.9rem; color: var(--muted); }
+  .upload-text strong { color: var(--text); display: block; font-size: 1rem; }
+  #file-input { display: none; }
+  .file-chosen {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin-top: 0.75rem;
+    word-break: break-all;
+  }
+
+  /* Sensibilità slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+  .slider-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 4px;
+  }
+  .slider-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    width: 2.5rem;
+    text-align: right;
+  }
+
+  /* Pulsante start */
+  .btn-start {
+    width: 100%;
+    max-width: 420px;
+    padding: 1.1rem;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-start:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,255,136,0.3); }
+  .btn-start:active { transform: translateY(0); }
+  .btn-start:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .info-box {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    line-height: 1.8;
+    text-align: center;
+    max-width: 420px;
+  }
+  .info-box span { color: var(--accent); }
+
+  /* ── SCHERMATA PLAYER ── */
+  #screen-player {
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+    background: #000;
+    position: relative;
+  }
+
+  /* Video principale */
+  #main-video {
+    width: 100%;
+    flex: 1;
+    background: #000;
+    display: block;
+    max-height: 60vh;
+    object-fit: contain;
+  }
+
+  /* HUD overlay sul video */
+  .hud {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 0.4rem 0.9rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    transition: all 0.3s;
+  }
+  .status-pill.watching {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .status-pill.not-watching {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse-dot 1s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .angle-badge {
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: right;
+  }
+  .angle-badge .val {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  /* Pannello inferiore */
+  .bottom-panel {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  /* Barra progresso */
+  .progress-wrap {
+    position: relative;
+    height: 3px;
+    background: var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.5s linear;
+    width: 0%;
+  }
+  .progress-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    left: 0%;
+    transition: left 0.5s linear;
+  }
+
+  /* Controlli */
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .time-display {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-icon.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  /* Mini webcam preview */
+  .cam-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+  #cam-preview {
+    width: 80px;
+    height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: #000;
+    transform: scaleX(-1);
+  }
+  .cam-info {
+    flex: 1;
+  }
+  .cam-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Barra sensibilità live */
+  .tilt-bar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 6px;
+    margin-top: 0.3rem;
+    overflow: hidden;
+  }
+  .tilt-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    background: var(--accent2);
+    transition: width 0.15s, background 0.3s;
+    width: 0%;
+  }
+  .tilt-bar-fill.over { background: var(--accent); }
+
+  /* Btn stop */
+  .btn-stop {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-stop:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Canvas nascosto per MediaPipe */
+  #offscreen-canvas { display: none; }
+
+  /* Overlay pausa */
+  .pause-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    max-height: 60vh;
+  }
+  .pause-overlay.visible { opacity: 1; }
+  .pause-icon {
+    font-size: 4rem;
+    filter: drop-shadow(0 0 20px rgba(255,255,255,0.5));
+  }
+
+  /* Loading spinner */
+  #loading-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    z-index: 100;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-msg">CARICAMENTO MEDIAPIPE...</div>
+</div>
+
+<!-- SCHERMATA HOME -->
+<div id="screen-home" style="display:none">
+  <div class="bg-grid"></div>
+
+  <div class="logo">Phone<span>Watch</span></div>
+  <div class="logo-sub">TABLET EDITION — FACE DETECTION</div>
+
+  <!-- Upload video -->
+  <div class="card">
+    <div class="card-title">// video da riprodurre</div>
+    <div class="upload-area" id="upload-area">
+      <div class="upload-icon">🎬</div>
+      <div class="upload-text">
+        <strong>Tocca per scegliere il video</strong>
+        oppure trascinalo qui
+      </div>
+      <input type="file" id="file-input" accept="video/*">
+    </div>
+    <div class="file-chosen" id="file-name" style="display:none"></div>
+  </div>
+
+  <!-- Sensibilità -->
+  <div class="card">
+    <div class="card-title">// sensibilità rilevamento</div>
+    <div class="slider-row">
+      <span class="slider-label">SOGLIA</span>
+      <input type="range" id="threshold-slider" min="5" max="35" value="15" step="1">
+      <span class="slider-val" id="threshold-val">15°</span>
+    </div>
+    <div style="margin-top:0.6rem; font-family:'Space Mono',monospace; font-size:0.65rem; color:var(--muted); line-height:1.7">
+      Gradi di inclinazione testa verso il basso<br>
+      <span style="color:var(--accent)">basso = più sensibile</span> · 
+      <span style="color:var(--accent2)">alto = meno falsi positivi</span>
+    </div>
+  </div>
+
+  <button class="btn-start" id="btn-start" disabled>
+    SCEGLI UN VIDEO PER INIZIARE
+  </button>
+
+  <div class="info-box">
+    <span>📷</span> La fotocamera frontale rileva<br>
+    quando china la testa verso il telefono<br>
+    <span>▶</span> testa giù = play · testa su = pausa
+  </div>
+</div>
+
+<!-- SCHERMATA PLAYER -->
+<div id="screen-player">
+  <div style="position:relative">
+    <video id="main-video" playsinline></video>
+    <div class="pause-overlay" id="pause-overlay">
+      <div class="pause-icon">⏸</div>
+    </div>
+    <div class="hud">
+      <div class="status-pill not-watching" id="status-pill">
+        <div class="status-dot"></div>
+        <span id="status-text">IN ATTESA</span>
+      </div>
+      <div class="angle-badge">
+        <span class="val" id="angle-val">0°</span>
+        PITCH
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-panel">
+    <!-- Progress bar -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-fill" id="progress-fill"></div>
+      <div class="progress-thumb" id="progress-thumb"></div>
+    </div>
+
+    <!-- Controlli -->
+    <div class="controls-row">
+      <div class="time-display" id="time-display">0:00 / 0:00</div>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn-icon" id="btn-rewind" title="−10s">⏪</button>
+        <button class="btn-icon active" id="btn-auto" title="Auto ON/OFF">🤖 AUTO</button>
+        <button class="btn-icon" id="btn-forward" title="+10s">⏩</button>
+      </div>
+      <button class="btn-stop" id="btn-stop">✕ STOP</button>
+    </div>
+
+    <!-- Webcam mini + barra tilt -->
+    <div class="cam-row">
+      <video id="cam-preview" autoplay muted playsinline></video>
+      <div class="cam-info">
+        <div class="cam-label">INCLINAZIONE TESTA</div>
+        <div class="tilt-bar-wrap">
+          <div class="tilt-bar-fill" id="tilt-bar"></div>
+        </div>
+        <div style="margin-top:0.3rem; font-family:'Space Mono',monospace; font-size:0.6rem; color:var(--muted)" id="tilt-hint">
+          china la testa verso il telefono per avviare
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="offscreen-canvas"></canvas>
+<video id="cam-video" autoplay muted playsinline style="display:none"></video>
+
+<!-- MediaPipe via modulo ES -->
+<script type="module">
+// Import con fallback su CDN alternativo
+let FaceLandmarker, FilesetResolver;
+try {
+  const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  FaceLandmarker = mp.FaceLandmarker;
+  FilesetResolver = mp.FilesetResolver;
+} catch(e) {
+  console.warn('jsdelivr fallito, provo unpkg...', e);
+  try {
+    const mp = await import('https://unpkg.com/@mediapipe/tasks-vision@0.10.14/+esm');
+    FaceLandmarker = mp.FaceLandmarker;
+    FilesetResolver = mp.FilesetResolver;
+  } catch(e2) {
+    console.error('MediaPipe non disponibile:', e2);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────
+let HEAD_DOWN_THRESHOLD = 15;
+const SMOOTHING = 12;
+const COOLDOWN_MS = 800;
+
+// ─────────────────────────────────────────────
+//  STATO GLOBALE
+// ─────────────────────────────────────────────
+let faceLandmarker = null;
+let videoFile = null;
+let autoMode = true;
+let isWatching = false;
+let history = [];
+let lastChange = 0;
+let animId = null;
+let camStream = null;
+
+// ─────────────────────────────────────────────
+//  INIT MEDIAPIPE
+// ─────────────────────────────────────────────
+async function initMediaPipe() {
+  const msg = document.getElementById('loading-msg');
+  const hideLoading = () => {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('screen-home').style.display = 'flex';
+  };
+
+  if (!FaceLandmarker || !FilesetResolver) {
+    msg.textContent = '⚠ MediaPipe non caricato — rilevamento base attivo';
+    setTimeout(hideLoading, 1500);
+    return;
+  }
+
+  try {
+    msg.textContent = 'CARICAMENTO MEDIAPIPE...';
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+    msg.textContent = 'DOWNLOAD MODELLO (~3MB)...';
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        delegate: 'GPU'
+      },
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: true,
+      runningMode: 'VIDEO',
+      numFaces: 1
+    });
+    msg.textContent = '✓ PRONTO!';
+    setTimeout(hideLoading, 400);
+  } catch(e) {
+    console.error('FaceLandmarker error:', e);
+    msg.textContent = '⚠ Errore modello — rilevamento base attivo';
+    setTimeout(hideLoading, 1500);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  HOME — UPLOAD E SLIDER
+// ─────────────────────────────────────────────
+const uploadArea = document.getElementById('upload-area');
+const fileInput = document.getElementById('file-input');
+const fileName = document.getElementById('file-name');
+const btnStart = document.getElementById('btn-start');
+const threshSlider = document.getElementById('threshold-slider');
+const threshVal = document.getElementById('threshold-val');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+function setFile(f) {
+  videoFile = f;
+  fileName.textContent = '✓ ' + f.name;
+  fileName.style.display = 'block';
+  btnStart.disabled = false;
+  btnStart.textContent = '▶  AVVIA PHONEWATCH';
+}
+
+threshSlider.addEventListener('input', () => {
+  HEAD_DOWN_THRESHOLD = parseInt(threshSlider.value);
+  threshVal.textContent = HEAD_DOWN_THRESHOLD + '°';
+});
+
+btnStart.addEventListener('click', startPlayer);
+
+// ─────────────────────────────────────────────
+//  AVVIA PLAYER
+// ─────────────────────────────────────────────
+async function startPlayer() {
+  document.getElementById('screen-home').style.display = 'none';
+  document.getElementById('screen-player').style.display = 'flex';
+  document.getElementById('screen-player').style.flexDirection = 'column';
+
+  // Carica video
+  const mainVideo = document.getElementById('main-video');
+  mainVideo.src = URL.createObjectURL(videoFile);
+  mainVideo.pause();
+
+  // Aggiorna progress bar
+  mainVideo.addEventListener('timeupdate', updateProgress);
+  mainVideo.addEventListener('ended', () => {
+    setPaused(true);
+    document.getElementById('tilt-hint').textContent = 'video terminato';
+  });
+
+  // Avvia webcam
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: 320, height: 240 },
+      audio: false
+    });
+    const camVideo = document.getElementById('cam-video');
+    const camPreview = document.getElementById('cam-preview');
+    camVideo.srcObject = camStream;
+    camPreview.srcObject = camStream;
+    camVideo.addEventListener('loadeddata', () => {
+      if (animId) cancelAnimationFrame(animId);
+      detectLoop();
+    });
+  } catch(e) {
+    console.error('Webcam error:', e);
+    document.getElementById('tilt-hint').textContent = '⚠ webcam non disponibile';
+  }
+
+  // Progress bar click
+  document.getElementById('progress-wrap').addEventListener('click', e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    mainVideo.currentTime = pct * mainVideo.duration;
+  });
+}
+
+// ─────────────────────────────────────────────
+//  LOOP DI RILEVAMENTO
+// ─────────────────────────────────────────────
+let lastTs = 0;
+let offCtx = null;
+let offCanvas = null;
+
+function detectLoop() {
+  const camVideo = document.getElementById('cam-video');
+  if (!camVideo.videoWidth || !camVideo.videoHeight) {
+    animId = requestAnimationFrame(detectLoop);
+    return;
+  }
+
+  // Prepara canvas offscreen al primo frame
+  if (!offCanvas) {
+    offCanvas = document.getElementById('offscreen-canvas');
+    offCanvas.width  = camVideo.videoWidth;
+    offCanvas.height = camVideo.videoHeight;
+    offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+  }
+
+  const now = performance.now();
+  if (faceLandmarker && now - lastTs > 100) { // ~10fps
+    lastTs = now;
+    try {
+      // Disegna il frame corrente sul canvas
+      offCtx.drawImage(camVideo, 0, 0, offCanvas.width, offCanvas.height);
+      // Passa il canvas (non il video) a MediaPipe
+      const result = faceLandmarker.detectForVideo(offCanvas, now);
+      processFaceResult(result);
+    } catch(e) {
+      console.warn('detect error:', e);
+    }
+  }
+
+  animId = requestAnimationFrame(detectLoop);
+}
+
+function processFaceResult(result) {
+  if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0) {
+    document.getElementById('angle-val').textContent = '--';
+    document.getElementById('tilt-hint').textContent = '👤 nessun viso — avvicinati alla webcam';
+    history.push(false);
+    if (history.length > SMOOTHING) history.shift();
+    updateTiltBar(0);
+    return;
+  }
+
+  const lm = result.faceLandmarks[0];
+
+  // Usiamo landmark 2D normalizzati (0..1):
+  // lm[10]  = fronte alta
+  // lm[152] = mento
+  // lm[1]   = punta naso
+  // Quando la testa è dritta davanti alla cam frontale del tablet:
+  //   noseRatio ≈ 0.50-0.55
+  // Quando china la testa verso il basso (guarda telefono in mano):
+  //   la cam vede più della sommità della testa → il naso "sale" nell'immagine
+  //   → noseRatio SCENDE sotto 0.45
+  // Quindi: tilt = (baseline - noseRatio) * 100
+  //   positivo = testa china avanti = guarda telefono
+
+  const forehead = lm[10];
+  const chin     = lm[152];
+  const nose     = lm[1];
+  const faceH    = Math.abs(chin.y - forehead.y);
+
+  if (faceH < 0.05) { updateTiltBar(0); return; }
+
+  const noseRatio = (nose.y - forehead.y) / faceH;
+  const baseline  = 0.50;
+  const tilt      = (baseline - noseRatio) * 100;
+
+  // Mostra il valore raw così puoi capire le soglie
+  document.getElementById('angle-val').textContent = tilt.toFixed(0);
+  document.getElementById('tilt-hint').textContent =
+    `ratio:${noseRatio.toFixed(3)} tilt:${tilt.toFixed(1)} soglia:${HEAD_DOWN_THRESHOLD}`;
+
+  updateTiltBar(tilt);
+
+  // Storia + media mobile
+  history.push(tilt >= HEAD_DOWN_THRESHOLD);
+  if (history.length > SMOOTHING) history.shift();
+  const trueCount    = history.filter(Boolean).length;
+  const smoothLooking = history.length >= 4 && trueCount / history.length > 0.5;
+
+  // Cambia stato con cooldown
+  const now = Date.now();
+  if (smoothLooking !== isWatching && (now - lastChange) >= COOLDOWN_MS) {
+    isWatching = smoothLooking;
+    lastChange = now;
+    if (autoMode) { if (isWatching) playVideo(); else pauseVideo(); }
+    updateStatusUI();
+  }
+}
+
+// ─────────────────────────────────────────────
+//  CONTROLLO VIDEO
+// ─────────────────────────────────────────────
+function playVideo() {
+  const v = document.getElementById('main-video');
+  if (v.ended) return;
+  v.play().catch(()=>{});
+  setPaused(false);
+}
+
+function pauseVideo() {
+  const v = document.getElementById('main-video');
+  v.pause();
+  setPaused(true);
+}
+
+function setPaused(paused) {
+  const overlay = document.getElementById('pause-overlay');
+  overlay.className = 'pause-overlay' + (paused ? ' visible' : '');
+}
+
+function updateStatusUI() {
+  const pill = document.getElementById('status-pill');
+  const text = document.getElementById('status-text');
+  if (isWatching) {
+    pill.className = 'status-pill watching';
+    text.textContent = '📱 TELEFONO';
+  } else {
+    pill.className = 'status-pill not-watching';
+    text.textContent = '🖥 MONITOR';
+  }
+}
+
+function updateTiltBar(pitchDeg) {
+  const pct = Math.min(100, Math.max(0, (pitchDeg / 40) * 100));
+  const tiltBar = document.getElementById('tilt-bar');
+  tiltBar.style.width = pct + '%';
+  tiltBar.className = 'tilt-bar-fill' + (pitchDeg >= HEAD_DOWN_THRESHOLD ? ' over' : '');
+}
+
+function updateProgress() {
+  const v = document.getElementById('main-video');
+  if (!v.duration) return;
+  const pct = (v.currentTime / v.duration) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-thumb').style.left = pct + '%';
+  document.getElementById('time-display').textContent =
+    formatTime(v.currentTime) + ' / ' + formatTime(v.duration);
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+// ─────────────────────────────────────────────
+//  CONTROLLI PULSANTI
+// ─────────────────────────────────────────────
+document.getElementById('btn-rewind').addEventListener('click', () => {
+  document.getElementById('main-video').currentTime -= 10;
+});
+document.getElementById('btn-forward').addEventListener('click', () => {
+  document.getElementById('main-video').currentTime += 10;
+});
+document.getElementById('btn-auto').addEventListener('click', () => {
+  autoMode = !autoMode;
+  const btn = document.getElementById('btn-auto');
+  btn.className = 'btn-icon' + (autoMode ? ' active' : '');
+  btn.textContent = autoMode ? '🤖 AUTO' : '🤖 OFF';
+  if (!autoMode) pauseVideo();
+});
+document.getElementById('btn-stop').addEventListener('click', () => {
+  // Torna alla home
+  if (animId) cancelAnimationFrame(animId);
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  document.getElementById('main-video').pause();
+  document.getElementById('main-video').src = '';
+  document.getElementById('screen-player').style.display = 'none';
+  document.getElementById('screen-home').style.display = 'flex';
+  history = [];
+  isWatching = false;
+  offCanvas = null;
+  offCtx = null;
+});
+
+// ─────────────────────────────────────────────
+//  AVVIO
+// ─────────────────────────────────────────────
+window.addEventListener('load', initMediaPipe);
+</script>
+</body>
+</html>
