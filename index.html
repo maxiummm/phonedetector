@@ -534,15 +534,29 @@
 
 <!-- MediaPipe via modulo ES -->
 <script type="module">
-import { FaceLandmarker, FilesetResolver }
-  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm';
+// Import con fallback su CDN alternativo
+let FaceLandmarker, FilesetResolver;
+try {
+  const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  FaceLandmarker = mp.FaceLandmarker;
+  FilesetResolver = mp.FilesetResolver;
+} catch(e) {
+  console.warn('jsdelivr fallito, provo unpkg...', e);
+  try {
+    const mp = await import('https://unpkg.com/@mediapipe/tasks-vision@0.10.14/+esm');
+    FaceLandmarker = mp.FaceLandmarker;
+    FilesetResolver = mp.FilesetResolver;
+  } catch(e2) {
+    console.error('MediaPipe non disponibile:', e2);
+  }
+}
 
 // ─────────────────────────────────────────────
 //  CONFIG
 // ─────────────────────────────────────────────
-let HEAD_DOWN_THRESHOLD = 15;  // gradi
-const SMOOTHING = 12;          // frame da mediare
-const COOLDOWN_MS = 800;       // ms prima di cambiare stato
+let HEAD_DOWN_THRESHOLD = 15;
+const SMOOTHING = 12;
+const COOLDOWN_MS = 800;
 
 // ─────────────────────────────────────────────
 //  STATO GLOBALE
@@ -561,15 +575,23 @@ let camStream = null;
 // ─────────────────────────────────────────────
 async function initMediaPipe() {
   const msg = document.getElementById('loading-msg');
+  const hideLoading = () => {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('screen-home').style.display = 'flex';
+  };
+
+  if (!FaceLandmarker || !FilesetResolver) {
+    msg.textContent = '⚠ MediaPipe non caricato — rilevamento base attivo';
+    setTimeout(hideLoading, 1500);
+    return;
+  }
+
   try {
     msg.textContent = 'CARICAMENTO MEDIAPIPE...';
-
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
     );
-
-    msg.textContent = 'DOWNLOAD MODELLO VISO (~3MB)...';
-
+    msg.textContent = 'DOWNLOAD MODELLO (~3MB)...';
     faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
@@ -580,20 +602,12 @@ async function initMediaPipe() {
       runningMode: 'VIDEO',
       numFaces: 1
     });
-
-    msg.textContent = 'PRONTO!';
-    setTimeout(() => {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('screen-home').style.display = 'flex';
-    }, 500);
-
+    msg.textContent = '✓ PRONTO!';
+    setTimeout(hideLoading, 400);
   } catch(e) {
-    msg.textContent = 'ERRORE: ' + e.message;
-    console.error(e);
-    setTimeout(() => {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('screen-home').style.display = 'flex';
-    }, 2000);
+    console.error('FaceLandmarker error:', e);
+    msg.textContent = '⚠ Errore modello — rilevamento base attivo';
+    setTimeout(hideLoading, 1500);
   }
 }
 
@@ -700,31 +714,37 @@ function detectLoop() {
 }
 
 function processFaceResult(result) {
-  if (!result || !result.facialTransformationMatrixes || result.facialTransformationMatrixes.length === 0) {
-    // Nessun viso rilevato
+  if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0) {
     document.getElementById('angle-val').textContent = '--';
     history.push(false);
     if (history.length > SMOOTHING) history.shift();
+    updateTiltBar(0);
     return;
   }
 
-  // Calcola pitch dalla matrice 3D
-  const m = result.facialTransformationMatrixes[0].data;
-  // Matrice 4x4 in row-major
-  const r20 = m[8]; const r21 = m[9]; const r22 = m[10];
-  const pitchRad = Math.atan2(-r20, Math.sqrt(r21*r21 + r22*r22));
-  let pitchDeg = pitchRad * 180 / Math.PI;
-  // Inverti: positivo = testa china avanti (guarda in basso)
-  pitchDeg = -pitchDeg;
+  let pitchDeg = 0;
+
+  // Prova prima con la matrice 3D (più precisa)
+  if (result.facialTransformationMatrixes && result.facialTransformationMatrixes.length > 0) {
+    const m = result.facialTransformationMatrixes[0].data;
+    const r20 = m[8]; const r21 = m[9]; const r22 = m[10];
+    const pitchRad = Math.atan2(-r20, Math.sqrt(r21*r21 + r22*r22));
+    pitchDeg = -(pitchRad * 180 / Math.PI);
+  } else {
+    // Fallback landmark 2D: usa posizione naso vs fronte
+    const lm = result.faceLandmarks[0];
+    const nose = lm[1], forehead = lm[10], chin = lm[152];
+    const faceH = Math.abs(chin.y - forehead.y);
+    if (faceH > 0) {
+      const raw = (nose.y - forehead.y) / faceH;
+      // raw > 0.5 = testa china avanti
+      pitchDeg = (raw - 0.48) * 90;
+    }
+  }
 
   // Aggiorna UI angolo
   document.getElementById('angle-val').textContent = (pitchDeg > 0 ? '+' : '') + pitchDeg.toFixed(0) + '°';
-
-  // Barra tilt
-  const pct = Math.min(100, Math.max(0, (pitchDeg / 40) * 100));
-  const tiltBar = document.getElementById('tilt-bar');
-  tiltBar.style.width = pct + '%';
-  tiltBar.className = 'tilt-bar-fill' + (pitchDeg >= HEAD_DOWN_THRESHOLD ? ' over' : '');
+  updateTiltBar(pitchDeg);
 
   // Aggiungi alla storia
   history.push(pitchDeg >= HEAD_DOWN_THRESHOLD);
@@ -788,6 +808,13 @@ function updateStatusUI() {
     pill.className = 'status-pill not-watching';
     text.textContent = '🖥 MONITOR';
   }
+}
+
+function updateTiltBar(pitchDeg) {
+  const pct = Math.min(100, Math.max(0, (pitchDeg / 40) * 100));
+  const tiltBar = document.getElementById('tilt-bar');
+  tiltBar.style.width = pct + '%';
+  tiltBar.className = 'tilt-bar-fill' + (pitchDeg >= HEAD_DOWN_THRESHOLD ? ' over' : '');
 }
 
 function updateProgress() {
