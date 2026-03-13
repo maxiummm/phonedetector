@@ -716,64 +716,58 @@ function detectLoop() {
 function processFaceResult(result) {
   if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0) {
     document.getElementById('angle-val').textContent = '--';
+    document.getElementById('tilt-hint').textContent = '👤 nessun viso — avvicinati alla webcam';
     history.push(false);
     if (history.length > SMOOTHING) history.shift();
     updateTiltBar(0);
     return;
   }
 
-  let pitchDeg = 0;
+  const lm = result.faceLandmarks[0];
 
-  // Prova prima con la matrice 3D (più precisa)
-  if (result.facialTransformationMatrixes && result.facialTransformationMatrixes.length > 0) {
-    const m = result.facialTransformationMatrixes[0].data;
-    const r20 = m[8]; const r21 = m[9]; const r22 = m[10];
-    const pitchRad = Math.atan2(-r20, Math.sqrt(r21*r21 + r22*r22));
-    pitchDeg = -(pitchRad * 180 / Math.PI);
-  } else {
-    // Fallback landmark 2D: usa posizione naso vs fronte
-    const lm = result.faceLandmarks[0];
-    const nose = lm[1], forehead = lm[10], chin = lm[152];
-    const faceH = Math.abs(chin.y - forehead.y);
-    if (faceH > 0) {
-      const raw = (nose.y - forehead.y) / faceH;
-      // raw > 0.5 = testa china avanti
-      pitchDeg = (raw - 0.48) * 90;
-    }
-  }
+  // Usiamo landmark 2D normalizzati (0..1):
+  // lm[10]  = fronte alta
+  // lm[152] = mento
+  // lm[1]   = punta naso
+  // Quando la testa è dritta davanti alla cam frontale del tablet:
+  //   noseRatio ≈ 0.50-0.55
+  // Quando china la testa verso il basso (guarda telefono in mano):
+  //   la cam vede più della sommità della testa → il naso "sale" nell'immagine
+  //   → noseRatio SCENDE sotto 0.45
+  // Quindi: tilt = (baseline - noseRatio) * 100
+  //   positivo = testa china avanti = guarda telefono
 
-  // Aggiorna UI angolo
-  document.getElementById('angle-val').textContent = (pitchDeg > 0 ? '+' : '') + pitchDeg.toFixed(0) + '°';
-  updateTiltBar(pitchDeg);
+  const forehead = lm[10];
+  const chin     = lm[152];
+  const nose     = lm[1];
+  const faceH    = Math.abs(chin.y - forehead.y);
 
-  // Aggiungi alla storia
-  history.push(pitchDeg >= HEAD_DOWN_THRESHOLD);
+  if (faceH < 0.05) { updateTiltBar(0); return; }
+
+  const noseRatio = (nose.y - forehead.y) / faceH;
+  const baseline  = 0.50;
+  const tilt      = (baseline - noseRatio) * 100;
+
+  // Mostra il valore raw così puoi capire le soglie
+  document.getElementById('angle-val').textContent = tilt.toFixed(0);
+  document.getElementById('tilt-hint').textContent =
+    `ratio:${noseRatio.toFixed(3)} tilt:${tilt.toFixed(1)} soglia:${HEAD_DOWN_THRESHOLD}`;
+
+  updateTiltBar(tilt);
+
+  // Storia + media mobile
+  history.push(tilt >= HEAD_DOWN_THRESHOLD);
   if (history.length > SMOOTHING) history.shift();
-
-  // Media mobile
-  const trueCount = history.filter(Boolean).length;
-  const smoothLooking = trueCount / history.length > 0.5;
+  const trueCount    = history.filter(Boolean).length;
+  const smoothLooking = history.length >= 4 && trueCount / history.length > 0.5;
 
   // Cambia stato con cooldown
   const now = Date.now();
   if (smoothLooking !== isWatching && (now - lastChange) >= COOLDOWN_MS) {
     isWatching = smoothLooking;
     lastChange = now;
-
-    if (autoMode) {
-      if (isWatching) {
-        playVideo();
-      } else {
-        pauseVideo();
-      }
-    }
+    if (autoMode) { if (isWatching) playVideo(); else pauseVideo(); }
     updateStatusUI();
-  }
-
-  // Aggiorna hint
-  if (history.length >= SMOOTHING) {
-    document.getElementById('tilt-hint').textContent =
-      smoothLooking ? '📱 telefono rilevato' : '🖥 guarda il monitor';
   }
 }
 
